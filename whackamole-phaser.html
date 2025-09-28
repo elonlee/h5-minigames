@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>打地鼠游戏 - Phaser.js</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #game-container {
+            border: 3px solid #fff;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .game-info {
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div class="game-info">
+            <span id="score">分数: 0</span> | 
+            <span id="time">时间: 30</span> | 
+            <span id="level">等级: 1</span>
+        </div>
+        <div id="game"></div>
+    </div>
+
+    <script>
+        class WhackAMoleGame extends Phaser.Scene {
+            constructor() {
+                super({ key: 'WhackAMoleGame' });
+            }
+
+            preload() {
+                // 创建简单的几何图形作为游戏资源
+                this.createGameAssets();
+            }
+
+            createGameAssets() {
+                // 创建洞的图形
+                const holeGraphics = this.add.graphics();
+                holeGraphics.fillStyle(0x8B4513); // 棕色
+                holeGraphics.fillCircle(25, 25, 25);
+                holeGraphics.generateTexture('hole', 50, 50);
+                holeGraphics.destroy();
+
+                // 创建地鼠图形
+                const moleGraphics = this.add.graphics();
+                moleGraphics.fillStyle(0x8B4513); // 棕色身体
+                moleGraphics.fillCircle(20, 20, 18);
+                moleGraphics.fillStyle(0xFFB6C1); // 粉色耳朵
+                moleGraphics.fillCircle(15, 10, 8);
+                moleGraphics.fillCircle(25, 10, 8);
+                moleGraphics.fillStyle(0x000000); // 黑色眼睛
+                moleGraphics.fillCircle(16, 18, 2);
+                moleGraphics.fillCircle(24, 18, 2);
+                moleGraphics.generateTexture('mole', 40, 40);
+                moleGraphics.destroy();
+
+                // 创建背景
+                const bgGraphics = this.add.graphics();
+                bgGraphics.fillStyle(0x228B22); // 绿色草地
+                bgGraphics.fillRect(0, 0, 600, 400);
+                // 添加一些草地纹理
+                for (let i = 0; i < 20; i++) {
+                    bgGraphics.fillStyle(0x32CD32);
+                    bgGraphics.fillRect(Math.random() * 600, Math.random() * 400, 2, 8);
+                }
+                bgGraphics.generateTexture('grass', 600, 400);
+                bgGraphics.destroy();
+            }
+
+            create() {
+                // 游戏状态
+                this.score = 0;
+                this.timeLeft = 30;
+                this.level = 1;
+                this.gameActive = true;
+                this.moles = [];
+                this.holes = [];
+
+                // 背景
+                this.add.image(300, 200, 'grass');
+
+                // 创建洞的位置
+                const holePositions = [
+                    [100, 120], [200, 120], [300, 120], [400, 120], [500, 120],
+                    [100, 200], [200, 200], [300, 200], [400, 200], [500, 200],
+                    [100, 280], [200, 280], [300, 280], [400, 280], [500, 280]
+                ];
+
+                // 创建洞
+                holePositions.forEach((pos, index) => {
+                    const hole = this.add.image(pos[0], pos[1], 'hole');
+                    hole.setScale(0.8);
+                    this.holes.push({
+                        x: pos[0],
+                        y: pos[1],
+                        sprite: hole,
+                        hasMole: false,
+                        index: index
+                    });
+                });
+
+                // 游戏计时器
+                this.gameTimer = this.time.addEvent({
+                    delay: 1000,
+                    callback: this.updateTimer,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                // 地鼠生成器
+                this.moleSpawner = this.time.addEvent({
+                    delay: this.getSpawnDelay(),
+                    callback: this.spawnMole,
+                    callbackScope: this,
+                    loop: true
+                });
+
+                // 更新UI
+                this.updateUI();
+            }
+
+            getSpawnDelay() {
+                // 根据等级调整地鼠出现频率
+                return Math.max(800 - (this.level * 100), 300);
+            }
+
+            spawnMole() {
+                if (!this.gameActive) return;
+
+                // 找到没有地鼠的洞
+                const emptyHoles = this.holes.filter(hole => !hole.hasMole);
+                if (emptyHoles.length === 0) return;
+
+                // 随机选择一个洞
+                const selectedHole = Phaser.Utils.Array.GetRandom(emptyHoles);
+                
+                // 创建地鼠
+                const mole = this.add.image(selectedHole.x, selectedHole.y - 30, 'mole');
+                mole.setScale(0.6);
+                mole.setInteractive();
+                mole.setData('hole', selectedHole);
+
+                // 添加出现动画
+                mole.setAlpha(0);
+                mole.setScale(0.3);
+                this.tweens.add({
+                    targets: mole,
+                    alpha: 1,
+                    scaleX: 0.6,
+                    scaleY: 0.6,
+                    duration: 200,
+                    ease: 'Back.easeOut'
+                });
+
+                // 点击事件
+                mole.on('pointerdown', () => {
+                    this.hitMole(mole);
+                });
+
+                // 设置洞的状态
+                selectedHole.hasMole = true;
+                selectedHole.mole = mole;
+
+                // 地鼠存在时间（根据等级调整）
+                const moleLifetime = Math.max(2000 - (this.level * 200), 800);
+                this.time.delayedCall(moleLifetime, () => {
+                    this.removeMole(mole);
+                });
+            }
+
+            hitMole(mole) {
+                if (!this.gameActive) return;
+
+                const hole = mole.getData('hole');
+                if (!hole || !hole.hasMole) return;
+
+                // 增加分数
+                this.score += this.level;
+                this.updateUI();
+
+                // 击中动画
+                this.tweens.add({
+                    targets: mole,
+                    scaleX: 0.8,
+                    scaleY: 0.8,
+                    duration: 100,
+                    yoyo: true,
+                    onComplete: () => {
+                        this.removeMole(mole);
+                    }
+                });
+
+                // 添加击中效果
+                this.createHitEffect(mole.x, mole.y);
+            }
+
+            createHitEffect(x, y) {
+                // 创建击中特效
+                const effect = this.add.circle(x, y, 5, 0xFFFF00);
+                this.tweens.add({
+                    targets: effect,
+                    scaleX: 2,
+                    scaleY: 2,
+                    alpha: 0,
+                    duration: 300,
+                    onComplete: () => {
+                        effect.destroy();
+                    }
+                });
+            }
+
+            removeMole(mole) {
+                if (!mole || !mole.active) return;
+
+                const hole = mole.getData('hole');
+                if (hole) {
+                    hole.hasMole = false;
+                    hole.mole = null;
+                }
+
+                // 消失动画
+                this.tweens.add({
+                    targets: mole,
+                    alpha: 0,
+                    scaleX: 0.3,
+                    scaleY: 0.3,
+                    duration: 150,
+                    onComplete: () => {
+                        mole.destroy();
+                    }
+                });
+            }
+
+            updateTimer() {
+                if (!this.gameActive) return;
+
+                this.timeLeft--;
+                this.updateUI();
+
+                if (this.timeLeft <= 0) {
+                    this.gameOver();
+                } else if (this.timeLeft % 10 === 0 && this.timeLeft > 0) {
+                    this.levelUp();
+                }
+            }
+
+            levelUp() {
+                this.level++;
+                this.moleSpawner.destroy();
+                this.moleSpawner = this.time.addEvent({
+                    delay: this.getSpawnDelay(),
+                    callback: this.spawnMole,
+                    callbackScope: this,
+                    loop: true
+                });
+            }
+
+            updateUI() {
+                document.getElementById('score').textContent = `分数: ${this.score}`;
+                document.getElementById('time').textContent = `时间: ${this.timeLeft}`;
+                document.getElementById('level').textContent = `等级: ${this.level}`;
+            }
+
+            gameOver() {
+                this.gameActive = false;
+                
+                // 停止所有定时器
+                if (this.gameTimer) this.gameTimer.destroy();
+                if (this.moleSpawner) this.moleSpawner.destroy();
+
+                // 移除所有地鼠
+                this.holes.forEach(hole => {
+                    if (hole.mole) {
+                        hole.mole.destroy();
+                        hole.hasMole = false;
+                    }
+                });
+
+                // 显示游戏结束界面
+                const gameOverText = this.add.text(300, 200, '游戏结束！', {
+                    fontSize: '32px',
+                    fill: '#FF0000',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+
+                const scoreText = this.add.text(300, 250, `最终得分: ${this.score}`, {
+                    fontSize: '24px',
+                    fill: '#FFFFFF',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+
+                const restartText = this.add.text(300, 300, '点击重新开始', {
+                    fontSize: '20px',
+                    fill: '#FFFF00',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+
+                // 重新开始功能
+                restartText.setInteractive();
+                restartText.on('pointerdown', () => {
+                    this.scene.restart();
+                });
+
+                // 添加重新开始按钮的悬停效果
+                restartText.on('pointerover', () => {
+                    restartText.setScale(1.1);
+                });
+                restartText.on('pointerout', () => {
+                    restartText.setScale(1);
+                });
+            }
+        }
+
+        // 游戏配置
+        const config = {
+            type: Phaser.AUTO,
+            width: 600,
+            height: 400,
+            parent: 'game',
+            backgroundColor: '#87CEEB',
+            scene: [WhackAMoleGame],
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 },
+                    debug: false
+                }
+            }
+        };
+
+        // 启动游戏
+        const game = new Phaser.Game(config);
+    </script>
+</body>
+</html>
