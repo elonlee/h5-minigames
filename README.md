@@ -44,6 +44,40 @@ A classic space shooter game inspired by the original Galaxian arcade game.
 - P: Pause/Resume
 - R: Restart
 
+### 3. Breakout
+经典打砖块玩法，带粒子、闪屏、抖动等反馈效果，并内置音效与背景音乐（可开关）。
+
+**How to Play:**
+1. Open `Breakout.html` in your web browser
+2. Use arrow keys (or A/D) to move the paddle
+3. Press Space to launch ball
+4. Clear all bricks to pass level, avoid losing all lives
+
+**Controls:**
+- Arrow Left / Arrow Right / A / D: Move paddle
+- Space: Launch ball
+- P: Pause/Resume
+- R: Restart
+- 声音按钮: 开/关 音效与音乐
+
+### 4. Tetris
+经典俄罗斯方块玩法，含幽灵方块、行消除闪烁、锁定粒子等表现增强，并内置音效与背景音乐（可开关）。
+
+**How to Play:**
+1. Open `Tetris.html` in your web browser
+2. Stack blocks to complete full lines
+3. Keep board from reaching the top
+
+**Controls:**
+- Arrow Left / Arrow Right (A / D): Move
+- Arrow Up / X / W: Rotate clockwise
+- Z: Rotate counter-clockwise
+- Arrow Down / S: Soft drop
+- Space: Hard drop
+- P: Pause/Resume
+- R: Restart
+- 声音按钮: 开/关 音效与音乐
+
 ## 🛠️ Technologies Used
 
 - HTML5 Canvas
