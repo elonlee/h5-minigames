@@ -30,6 +30,20 @@ A classic space shooter game inspired by the original Galaxian arcade game.
 - Diving enemies: 20 points
 - High score automatically saved
 
+### 2. Classic Snake
+经典贪吃蛇玩法：网格移动、吃食物增长、计分、碰撞结束、可重开。
+
+**How to Play:**
+1. Open `Snake.html` in your web browser
+2. Use arrow keys or WASD to control direction
+3. Eat food to grow and gain score
+4. Press `P` to pause/resume, `R` to restart after game over
+
+**Controls:**
+- Arrow Keys / WASD: Move
+- P: Pause/Resume
+- R: Restart
+
 ## 🛠️ Technologies Used
 
 - HTML5 Canvas
