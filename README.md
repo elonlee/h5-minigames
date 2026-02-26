@@ -78,6 +78,26 @@ A classic space shooter game inspired by the original Galaxian arcade game.
 - R: Restart
 - 声音按钮: 开/关 音效与音乐
 
+### 5. Castlevania-style Demo
+恶魔城风横版动作 Demo：平台跳跃、近战攻击、敌人 AI、Boss 战、通关结算，支持键盘和触屏。
+
+**How to Play:**
+1. Open `Castlevania.html` in your web browser
+2. Press `Enter` to start
+3. Defeat enemies and boss, then reach the gate to win
+
+**Controls:**
+- A / D or Arrow Left / Right: Move
+- K / Arrow Up / Space: Jump
+- J: Attack
+- P: Pause/Resume
+- M: Toggle sound
+- R: Restart after win/lose
+
+**Art Assets:**
+- Uses selected set #3: Kenney New Platformer Pack (CC0)
+- Asset folder: `assets/kenney_new_platformer_pack/`
+
 ## 🛠️ Technologies Used
 
 - HTML5 Canvas

@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>恶魔城风 H5 Demo</title>
+  <style>
+    :root {
+      --bg-1: #090a17;
+      --bg-2: #1b1029;
+      --panel: rgba(9, 9, 20, 0.86);
+      --accent: #d4af37;
+      --danger: #c94040;
+      --ok: #67d782;
+      --text: #f5ecd2;
+      --muted: #c5b89a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(1200px 600px at 65% 10%, #3d2247 0%, transparent 55%),
+        radial-gradient(900px 500px at 30% 90%, #10253f 0%, transparent 58%),
+        linear-gradient(180deg, var(--bg-2), var(--bg-1));
+      color: var(--text);
+      font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    }
+    .wrap {
+      width: min(100vw, 1080px);
+      padding: 14px;
+    }
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 2px solid #4f3f29;
+      background: #0c0c19;
+      box-shadow: 0 0 35px rgba(0, 0, 0, 0.55), inset 0 0 22px rgba(0, 0, 0, 0.5);
+      image-rendering: crisp-edges;
+      border-radius: 6px;
+      touch-action: none;
+    }
+    .touch {
+      margin-top: 10px;
+      display: none;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .touch-group { display: flex; gap: 8px; }
+    .btn {
+      width: 64px;
+      height: 64px;
+      border: 1px solid #77674f;
+      background: rgba(20, 14, 29, 0.86);
+      color: var(--text);
+      font-size: 24px;
+      border-radius: 12px;
+      user-select: none;
+    }
+    .btn:active { transform: translateY(1px); }
+    @media (max-width: 900px), (pointer: coarse) {
+      .touch { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hud-top">
+      <span>恶魔城风 Demo · 方向键/AD 移动 · J 攻击 · K/空格 跳跃 · P 暂停</span>
+      <span id="scoreText">分数: 0</span>
+    </div>
+    <canvas id="game" width="960" height="540"></canvas>
+    <div class="touch">
+      <div class="touch-group">
+        <button class="btn" data-key="left">◀</button>
+        <button class="btn" data-key="right">▶</button>
+      </div>
+      <div class="touch-group">
+        <button class="btn" data-key="jump">▲</button>
+        <button class="btn" data-key="attack">✦</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const scoreText = document.getElementById('scoreText');
+    ctx.imageSmoothingEnabled = false;
+
+    function loadImage(path) {
+      const img = new Image();
+      img.src = path;
+      return img;
+    }
+
+    const S = {
+      playerIdle: loadImage('assets/kenney_new_platformer_pack/Sprites/Characters/Default/character_purple_idle.png'),
+      playerWalkA: loadImage('assets/kenney_new_platformer_pack/Sprites/Characters/Default/character_purple_walk_a.png'),
+      playerWalkB: loadImage('assets/kenney_new_platformer_pack/Sprites/Characters/Default/character_purple_walk_b.png'),
+      playerJump: loadImage('assets/kenney_new_platformer_pack/Sprites/Characters/Default/character_purple_jump.png'),
+      playerHit: loadImage('assets/kenney_new_platformer_pack/Sprites/Characters/Default/character_purple_hit.png'),
+      playerFront: loadImage('assets/kenney_new_platformer_pack/Sprites/Characters/Default/character_purple_front.png'),
+      slimeA: loadImage('assets/kenney_new_platformer_pack/Sprites/Enemies/Default/slime_spike_walk_a.png'),
+      slimeB: loadImage('assets/kenney_new_platformer_pack/Sprites/Enemies/Default/slime_spike_walk_b.png'),
+      slimeRest: loadImage('assets/kenney_new_platformer_pack/Sprites/Enemies/Default/slime_spike_rest.png'),
+      flyA: loadImage('assets/kenney_new_platformer_pack/Sprites/Enemies/Default/fly_a.png'),
+      flyB: loadImage('assets/kenney_new_platformer_pack/Sprites/Enemies/Default/fly_b.png'),
+      bossIdle: loadImage('assets/kenney_new_platformer_pack/Sprites/Enemies/Default/block_idle.png'),
+      bossFall: loadImage('assets/kenney_new_platformer_pack/Sprites/Enemies/Default/block_fall.png'),
+      fireball: loadImage('assets/kenney_new_platformer_pack/Sprites/Tiles/Default/fireball.png'),
+      door: loadImage('assets/kenney_new_platformer_pack/Sprites/Tiles/Default/door_closed.png'),
+      signExit: loadImage('assets/kenney_new_platformer_pack/Sprites/Tiles/Default/sign_exit.png'),
+      torchA: loadImage('assets/kenney_new_platformer_pack/Sprites/Tiles/Default/torch_on_a.png'),
+      torchB: loadImage('assets/kenney_new_platformer_pack/Sprites/Tiles/Default/torch_on_b.png'),
+      platformTop: loadImage('assets/kenney_new_platformer_pack/Sprites/Tiles/Default/terrain_stone_horizontal_middle.png'),
+      platformBody: loadImage('assets/kenney_new_platformer_pack/Sprites/Tiles/Default/terrain_stone_block_center.png'),
+    };
+
+    const G = {
+      W: canvas.width,
+      H: canvas.height,
+      worldW: 3400,
+      gravity: 1700,
+      keys: { left: false, right: false, jump: false, attack: false },
+      prevJump: false,
+      prevAttack: false,
+      state: 'start', // start | playing | pause | win | lose
+      score: 0,
+      time: 0,
+      cameraX: 0,
+      checkpointX: 80,
+      audioOn: true,
+    };
+
+    const level = {
+      platforms: [
+        { x: 0, y: 490, w: 520, h: 60 },
+        { x: 600, y: 490, w: 480, h: 60 },
+        { x: 1130, y: 490, w: 440, h: 60 },
+        { x: 1640, y: 490, w: 680, h: 60 },
+        { x: 2380, y: 490, w: 620, h: 60 },
+        { x: 3020, y: 490, w: 380, h: 60 },
+        { x: 300, y: 390, w: 170, h: 20 },
+        { x: 760, y: 355, w: 160, h: 20 },
+        { x: 1240, y: 340, w: 150, h: 20 },
+        { x: 1870, y: 355, w: 200, h: 20 },
+        { x: 2550, y: 370, w: 180, h: 20 },
+      ],
+      gate: { x: 3320, y: 400, w: 40, h: 90 },
+    };
+
+    const player = {
+      x: 80, y: 420,
+      w: 34, h: 54,
+      vx: 0, vy: 0,
+      speed: 280,
+      jump: 670,
+      onGround: false,
+      facing: 1,
+      hp: 100,
+      maxHp: 100,
+      inv: 0,
+      attackTimer: 0,
+      hurtTimer: 0,
+      lives: 3,
+    };
+
+    const enemies = [];
+    const projectiles = [];
+    const particles = [];
+
+    function spawnEnemies() {
+      enemies.length = 0;
+      const packs = [
+        ['skeleton', 460, 436], ['bat', 720, 250], ['skeleton', 950, 436],
+        ['bat', 1310, 220], ['skeleton', 1490, 436], ['skeleton', 2010, 436],
+        ['bat', 2160, 265], ['skeleton', 2640, 436], ['bat', 2880, 260],
+      ];
+      for (const [type, x, y] of packs) {
+        enemies.push(makeEnemy(type, x, y));
+      }
+      enemies.push(makeEnemy('boss', 3160, 390));
+    }
+
+    function makeEnemy(type, x, y) {
+      if (type === 'skeleton') {
+        return { type, x, y, w: 34, h: 54, vx: 65, hp: 45, maxHp: 45, dir: 1, alive: true, hitCd: 0, baseX: x };
+      }
+      if (type === 'bat') {
+        return { type, x, y, w: 34, h: 24, hp: 30, maxHp: 30, alive: true, t: Math.random() * 6.28, hitCd: 0, baseY: y };
+      }
+      return { type: 'boss', x, y, w: 72, h: 100, hp: 320, maxHp: 320, alive: true, dir: -1, hitCd: 0, atkCd: 1.5 };
+    }
+
+    function rectHit(a, b) {
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    function drawSprite(img, x, y, w, h, flip = false) {
+      if (!img || !img.complete || !img.naturalWidth) return false;
+      if (flip) {
+        ctx.save();
+        ctx.translate(x + w, y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0, w, h);
+        ctx.restore();
+      } else {
+        ctx.drawImage(img, x, y, w, h);
+      }
+      return true;
+    }
+
+    function playTone(freq = 440, dur = 0.08, type = 'square', vol = 0.05) {
+      if (!G.audioOn) return;
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!playTone.ctx) playTone.ctx = new Ctx();
+      const ac = playTone.ctx;
+      if (ac.state === 'suspended') ac.resume();
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.value = vol;
+      osc.connect(gain);
+      gain.connect(ac.destination);
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+      osc.stop(ac.currentTime + dur);
+    }
+
+    function emit(x, y, count, color) {
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x, y,
+          vx: (Math.random() - 0.5) * 320,
+          vy: (Math.random() - 0.7) * 260,
+          life: 0.5 + Math.random() * 0.4,
+          maxLife: 0.9,
+          color,
+        });
+      }
+    }
+
+    function resetFull() {
+      G.score = 0;
+      G.checkpointX = 80;
+      player.x = 80; player.y = 420;
+      player.vx = 0; player.vy = 0;
+      player.hp = player.maxHp;
+      player.lives = 3;
+      player.inv = 0;
+      spawnEnemies();
+      projectiles.length = 0;
+      particles.length = 0;
+      scoreText.textContent = '分数: 0';
+    }
+
+    function respawn() {
+      player.x = G.checkpointX;
+      player.y = 350;
+      player.vx = 0;
+      player.vy = 0;
+      player.hp = player.maxHp;
+      player.inv = 2;
+    }
+
+    function hurtPlayer(dmg) {
+      if (player.inv > 0 || G.state !== 'playing') return;
+      player.hp -= dmg;
+      player.inv = 1.0;
+      player.hurtTimer = 0.22;
+      playTone(130, 0.12, 'sawtooth', 0.06);
+      emit(player.x + player.w / 2, player.y + player.h / 2, 10, '#ff5555');
+      if (player.hp <= 0) {
+        player.lives -= 1;
+        if (player.lives <= 0) {
+          G.state = 'lose';
+          playTone(90, 0.35, 'triangle', 0.08);
+        } else {
+          respawn();
+        }
+      }
+    }
+
+    function killEnemy(e) {
+      if (!e.alive) return;
+      e.alive = false;
+      const gain = e.type === 'boss' ? 1200 : e.type === 'skeleton' ? 180 : 140;
+      G.score += gain;
+      scoreText.textContent = `分数: ${G.score}`;
+      emit(e.x + e.w / 2, e.y + e.h / 2, e.type === 'boss' ? 34 : 14, '#f7c56d');
+      playTone(e.type === 'boss' ? 310 : 520, e.type === 'boss' ? 0.3 : 0.08, 'square', 0.06);
+      if (e.type === 'boss') {
+        G.checkpointX = 3100;
+      }
+    }
+
+    function updatePlayer(dt) {
+      player.inv -= dt;
+      player.hurtTimer -= dt;
+      player.attackTimer -= dt;
+
+      const move = (G.keys.left ? -1 : 0) + (G.keys.right ? 1 : 0);
+      player.vx = move * player.speed;
+      if (move) player.facing = move > 0 ? 1 : -1;
+
+      const jumpPressed = G.keys.jump && !G.prevJump;
+      if (jumpPressed && player.onGround) {
+        player.vy = -player.jump;
+        player.onGround = false;
+        playTone(420, 0.07, 'triangle', 0.05);
+      }
+      G.prevJump = G.keys.jump;
+
+      const attackPressed = G.keys.attack && !G.prevAttack;
+      if (attackPressed && player.attackTimer <= 0) {
+        player.attackTimer = 0.26;
+        playTone(760, 0.04, 'square', 0.05);
+      }
+      G.prevAttack = G.keys.attack;
+
+      player.vy += G.gravity * dt;
+
+      player.x += player.vx * dt;
+      player.y += player.vy * dt;
+
+      player.onGround = false;
+      for (const p of level.platforms) {
+        if (player.x + player.w <= p.x || player.x >= p.x + p.w || player.y + player.h <= p.y || player.y >= p.y + p.h) continue;
+
+        const px = player.x + player.w / 2;
+        const py = player.y + player.h / 2;
+        const cx = p.x + p.w / 2;
+        const cy = p.y + p.h / 2;
+        const ox = (p.w / 2 + player.w / 2) - Math.abs(px - cx);
+        const oy = (p.h / 2 + player.h / 2) - Math.abs(py - cy);
+
+        if (ox < oy) {
+          if (px < cx) player.x -= ox;
+          else player.x += ox;
+          player.vx = 0;
+        } else {
+          if (py < cy) {
+            player.y -= oy;
+            player.vy = 0;
+            player.onGround = true;
+          } else {
+            player.y += oy;
+            player.vy *= -0.2;
+          }
+        }
+      }
+
+      if (player.y > 640) hurtPlayer(999);
+      player.x = Math.max(0, Math.min(G.worldW - player.w, player.x));
+
+      if (player.x > 1500) G.checkpointX = Math.max(G.checkpointX, 1670);
+      if (player.x > 2500) G.checkpointX = Math.max(G.checkpointX, 2440);
+    }
+
+    function updateEnemies(dt) {
+      const slashActive = player.attackTimer > 0.11 && player.attackTimer < 0.25;
+      const slash = {
+        x: player.facing > 0 ? player.x + player.w - 2 : player.x - 46,
+        y: player.y + 10,
+        w: 46,
+        h: 30,
+      };
+
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        e.hitCd -= dt;
+
+        if (e.type === 'skeleton') {
+          e.x += e.vx * e.dir * dt;
+          if (Math.abs(e.x - e.baseX) > 120) e.dir *= -1;
+          if (Math.abs(e.x - player.x) < 160) e.dir = player.x > e.x ? 1 : -1;
+        }
+
+        if (e.type === 'bat') {
+          e.t += dt * 3;
+          e.x += Math.sign(player.x - e.x) * 75 * dt;
+          e.y = e.baseY + Math.sin(e.t) * 34;
+        }
+
+        if (e.type === 'boss') {
+          const dx = player.x - e.x;
+          const near = Math.abs(dx) < 520;
+          if (near) {
+            e.dir = dx > 0 ? 1 : -1;
+            e.x += Math.sign(dx) * 76 * dt;
+            e.atkCd -= dt;
+            if (e.atkCd <= 0) {
+              e.atkCd = Math.max(0.9, e.hp < e.maxHp * 0.5 ? 0.65 : 1.1);
+              projectiles.push({
+                x: e.x + e.w / 2,
+                y: e.y + 36,
+                r: 8,
+                vx: Math.sign(dx) * (e.hp < e.maxHp * 0.5 ? 320 : 250),
+                vy: -50,
+                life: 3,
+              });
+              playTone(180, 0.1, 'sawtooth', 0.07);
+            }
+          }
+        }
+
+        if (slashActive && e.hitCd <= 0 && rectHit(slash, e)) {
+          const dmg = e.type === 'boss' ? 14 : 24;
+          e.hp -= dmg;
+          e.hitCd = 0.18;
+          e.x += player.facing * 12;
+          emit(e.x + e.w / 2, e.y + e.h / 2, 8, '#ffc966');
+          playTone(540, 0.05, 'square', 0.05);
+          if (e.hp <= 0) killEnemy(e);
+        }
+
+        if (rectHit(player, e)) {
+          hurtPlayer(e.type === 'boss' ? 20 : 12);
+          player.x += (player.x < e.x ? -28 : 28);
+        }
+      }
+    }
+
+    function updateProjectiles(dt) {
+      for (const p of projectiles) {
+        p.life -= dt;
+        p.vy += 200 * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.life <= 0) p.dead = true;
+        if (p.y > 560 || p.x < -100 || p.x > G.worldW + 100) p.dead = true;
+        if (!p.dead && rectHit({ x: p.x - p.r, y: p.y - p.r, w: p.r * 2, h: p.r * 2 }, player)) {
+          hurtPlayer(16);
+          p.dead = true;
+        }
+      }
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        if (projectiles[i].dead) projectiles.splice(i, 1);
+      }
+    }
+
+    function updateParticles(dt) {
+      for (const p of particles) {
+        p.life -= dt;
+        p.vy += 800 * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+      }
+      for (let i = particles.length - 1; i >= 0; i--) {
+        if (particles[i].life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function checkWin() {
+      const boss = enemies.find(e => e.type === 'boss');
+      if (boss && !boss.alive && player.x > level.gate.x - 24) {
+        G.state = 'win';
+        playTone(523, 0.1, 'triangle', 0.06);
+        setTimeout(() => playTone(659, 0.1, 'triangle', 0.06), 110);
+        setTimeout(() => playTone(784, 0.2, 'triangle', 0.06), 220);
+      }
+    }
+
+    function renderBackground() {
+      const g = ctx.createLinearGradient(0, 0, 0, G.H);
+      g.addColorStop(0, '#141228');
+      g.addColorStop(0.6, '#19142b');
+      g.addColorStop(1, '#080910');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, G.W, G.H);
+
+      ctx.fillStyle = '#f4d9a2';
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.arc(770, 100, 46, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      const px = G.cameraX * 0.3;
+      ctx.fillStyle = '#1a1a2f';
+      for (let i = 0; i < 7; i++) {
+        const x = (i * 220) - (px % 220);
+        const h = 120 + (i % 3) * 35;
+        ctx.fillRect(x, G.H - h - 60, 130, h);
+      }
+
+      ctx.fillStyle = '#1f1d33';
+      for (let i = 0; i < 8; i++) {
+        const x = (i * 190) - (G.cameraX * 0.55 % 190);
+        const h = 90 + (i % 4) * 20;
+        ctx.fillRect(x, G.H - h - 15, 100, h);
+      }
+    }
+
+    function drawWorld() {
+      ctx.save();
+      ctx.translate(-G.cameraX, 0);
+
+      for (const p of level.platforms) {
+        ctx.fillStyle = '#2a2230';
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        for (let x = p.x; x < p.x + p.w; x += 32) {
+          drawSprite(S.platformBody, x, p.y + 26, 32, 32);
+        }
+        for (let x = p.x; x < p.x + p.w; x += 32) {
+          drawSprite(S.platformTop, x, p.y - 2, 32, 32);
+        }
+      }
+
+      // 终点门
+      if (!drawSprite(S.door, level.gate.x - 10, level.gate.y + 24, 64, 64)) {
+        ctx.fillStyle = '#262020';
+        ctx.fillRect(level.gate.x, level.gate.y, level.gate.w, level.gate.h);
+      }
+      drawSprite(S.signExit, level.gate.x - 4, level.gate.y - 32, 32, 32);
+      const torch = Math.floor(G.time * 8) % 2 === 0 ? S.torchA : S.torchB;
+      drawSprite(torch, level.gate.x - 44, level.gate.y + 28, 28, 28);
+      drawSprite(torch, level.gate.x + level.gate.w + 16, level.gate.y + 28, 28, 28);
+
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        if (e.type === 'skeleton') {
+          const frame = Math.floor(G.time * 7) % 2 === 0 ? S.slimeA : S.slimeB;
+          if (!drawSprite(frame, e.x - 10, e.y - 6, e.w + 20, e.h + 8, e.dir < 0)) {
+            ctx.fillStyle = '#d7d7d7';
+            ctx.fillRect(e.x, e.y, e.w, e.h);
+          }
+        } else if (e.type === 'bat') {
+          const frame = Math.floor(G.time * 10) % 2 === 0 ? S.flyA : S.flyB;
+          if (!drawSprite(frame, e.x - 10, e.y - 12, e.w + 20, e.h + 22, player.x < e.x)) {
+            ctx.fillStyle = '#5b3f6e';
+            ctx.beginPath();
+            ctx.ellipse(e.x + e.w * 0.5, e.y + e.h * 0.5, 20, 12, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          const frame = Math.floor(G.time * 5) % 2 === 0 ? S.bossIdle : S.bossFall;
+          if (!drawSprite(frame, e.x - 20, e.y + 24, e.w + 40, e.h - 8, e.dir < 0)) {
+            ctx.fillStyle = '#7a3232';
+            ctx.fillRect(e.x, e.y, e.w, e.h);
+          }
+        }
+
+        // 敌人血条
+        if (e.type === 'boss' || e.hp < e.maxHp) {
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          ctx.fillRect(e.x, e.y - 12, e.w, 6);
+          ctx.fillStyle = '#f16b6b';
+          ctx.fillRect(e.x, e.y - 12, e.w * Math.max(0, e.hp / e.maxHp), 6);
+        }
+      }
+
+      for (const p of projectiles) {
+        if (!drawSprite(S.fireball, p.x - 11, p.y - 11, 22, 22)) {
+          ctx.fillStyle = '#b44cff';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      for (const p of particles) {
+        const a = Math.max(0, p.life / p.maxLife);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, 4, 4);
+      }
+      ctx.globalAlpha = 1;
+
+      const flash = player.inv > 0 && Math.floor(player.inv * 18) % 2 === 0;
+      if (!flash) {
+        let frame = S.playerIdle;
+        if (player.hurtTimer > 0) frame = S.playerHit;
+        else if (!player.onGround) frame = S.playerJump;
+        else if (Math.abs(player.vx) > 8) frame = Math.floor(G.time * 10) % 2 === 0 ? S.playerWalkA : S.playerWalkB;
+        if (!drawSprite(frame, player.x - 18, player.y - 18, player.w + 34, player.h + 28, player.facing < 0)) {
+          ctx.fillStyle = player.hurtTimer > 0 ? '#ff7a7a' : '#6bb7d6';
+          ctx.fillRect(player.x, player.y, player.w, player.h);
+        }
+      }
+
+      if (player.attackTimer > 0.11 && player.attackTimer < 0.25) {
+        ctx.strokeStyle = '#ffdf8b';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        if (player.facing > 0) {
+          ctx.arc(player.x + player.w + 6, player.y + 24, 20, -0.7, 0.9);
+        } else {
+          ctx.arc(player.x - 6, player.y + 24, 20, 2.2, 4.0);
+        }
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawUI() {
+      // 玩家血量
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(20, 20, 220, 16);
+      ctx.fillStyle = '#d95757';
+      ctx.fillRect(20, 20, 220 * Math.max(0, player.hp / player.maxHp), 16);
+      ctx.strokeStyle = '#e7c88b';
+      ctx.strokeRect(20, 20, 220, 16);
+      ctx.fillStyle = '#f5ecd2';
+      ctx.font = '13px Trebuchet MS';
+      ctx.fillText(`HP ${Math.max(0, Math.ceil(player.hp))}/${player.maxHp}   命:${player.lives}`, 26, 32);
+
+      const boss = enemies.find(e => e.type === 'boss' && e.alive);
+      if (boss && player.x > 2800) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(300, 20, 340, 14);
+        ctx.fillStyle = '#9b3f3f';
+        ctx.fillRect(300, 20, 340 * Math.max(0, boss.hp / boss.maxHp), 14);
+        ctx.strokeStyle = '#cfa96c';
+        ctx.strokeRect(300, 20, 340, 14);
+        ctx.fillStyle = '#f0ddbf';
+        ctx.fillText('黑暗领主', 448, 15);
+      }
+
+      if (G.state === 'start' || G.state === 'pause' || G.state === 'win' || G.state === 'lose') {
+        ctx.fillStyle = 'rgba(0,0,0,0.68)';
+        ctx.fillRect(0, 0, G.W, G.H);
+        ctx.textAlign = 'center';
+        if (G.state === 'start') {
+          ctx.fillStyle = '#f3ddb1';
+          ctx.font = 'bold 44px Trebuchet MS';
+          ctx.fillText('暗夜回廊', G.W / 2, 130);
+          ctx.font = '20px Trebuchet MS';
+          ctx.fillStyle = '#e8d6b2';
+          ctx.fillText('击败黑暗领主，抵达终点大门', G.W / 2, 170);
+          ctx.fillText('Enter 开始 / M 开关音效', G.W / 2, 198);
+
+          // 键位说明卡片
+          ctx.fillStyle = 'rgba(20, 16, 30, 0.82)';
+          ctx.fillRect(150, 230, 300, 210);
+          ctx.strokeStyle = '#7b6242';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(150, 230, 300, 210);
+
+          ctx.fillStyle = '#f1ddb8';
+          ctx.font = 'bold 20px Trebuchet MS';
+          ctx.fillText('键盘操作', 300, 264);
+          ctx.font = '18px Trebuchet MS';
+          ctx.fillStyle = '#e9d6b4';
+          ctx.fillText('A / D 或 ← / →：移动', 300, 300);
+          ctx.fillText('K / ↑ / Space：跳跃', 300, 334);
+          ctx.fillText('J：攻击', 300, 368);
+          ctx.fillText('P：暂停 / 继续', 300, 402);
+
+          // 触屏说明卡片
+          ctx.fillStyle = 'rgba(20, 16, 30, 0.82)';
+          ctx.fillRect(510, 230, 300, 210);
+          ctx.strokeStyle = '#7b6242';
+          ctx.strokeRect(510, 230, 300, 210);
+
+          ctx.fillStyle = '#f1ddb8';
+          ctx.font = 'bold 20px Trebuchet MS';
+          ctx.fillText('触屏操作', 660, 264);
+          ctx.font = '18px Trebuchet MS';
+          ctx.fillStyle = '#e9d6b4';
+          ctx.fillText('◀ / ▶：左右移动', 660, 300);
+          ctx.fillText('▲：跳跃', 660, 334);
+          ctx.fillText('✦：攻击', 660, 368);
+          ctx.fillText('提示：手机横屏体验更好', 660, 402);
+        }
+        if (G.state === 'pause') {
+          ctx.fillStyle = '#f1debb';
+          ctx.font = 'bold 42px Trebuchet MS';
+          ctx.fillText('已暂停', G.W / 2, 220);
+          ctx.font = '20px Trebuchet MS';
+          ctx.fillText('按 P 继续', G.W / 2, 260);
+        }
+        if (G.state === 'win') {
+          ctx.fillStyle = '#f3deb4';
+          ctx.font = 'bold 42px Trebuchet MS';
+          ctx.fillText('讨伐成功', G.W / 2, 210);
+          ctx.font = '20px Trebuchet MS';
+          ctx.fillText(`最终分数: ${G.score}`, G.W / 2, 250);
+          ctx.fillText('按 R 重新开始', G.W / 2, 284);
+        }
+        if (G.state === 'lose') {
+          ctx.fillStyle = '#ffb8b8';
+          ctx.font = 'bold 42px Trebuchet MS';
+          ctx.fillText('你已陨落', G.W / 2, 210);
+          ctx.font = '20px Trebuchet MS';
+          ctx.fillText(`最终分数: ${G.score}`, G.W / 2, 250);
+          ctx.fillText('按 R 再战', G.W / 2, 284);
+        }
+        ctx.textAlign = 'left';
+      }
+    }
+
+    function update(dt) {
+      if (G.state !== 'playing') return;
+      updatePlayer(dt);
+      updateEnemies(dt);
+      updateProjectiles(dt);
+      updateParticles(dt);
+      checkWin();
+
+      const target = player.x - G.W * 0.35;
+      G.cameraX += (target - G.cameraX) * Math.min(1, dt * 8);
+      G.cameraX = Math.max(0, Math.min(G.worldW - G.W, G.cameraX));
+    }
+
+    function draw() {
+      renderBackground();
+      drawWorld();
+      drawUI();
+    }
+
+    let last = performance.now();
+    function loop(now) {
+      const dt = Math.min(0.033, (now - last) / 1000);
+      last = now;
+      G.time += dt;
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    function setKey(key, down) {
+      if (key in G.keys) G.keys[key] = down;
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') setKey('left', true);
+      if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') setKey('right', true);
+      if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'k' || e.key === ' ') setKey('jump', true);
+      if (e.key.toLowerCase() === 'j') setKey('attack', true);
+
+      if (e.key === 'Enter' && G.state === 'start') {
+        G.state = 'playing';
+        playTone(370, 0.1, 'triangle', 0.05);
+      }
+      if (e.key.toLowerCase() === 'p' && (G.state === 'playing' || G.state === 'pause')) {
+        G.state = G.state === 'playing' ? 'pause' : 'playing';
+      }
+      if (e.key.toLowerCase() === 'm') G.audioOn = !G.audioOn;
+      if (e.key.toLowerCase() === 'r' && (G.state === 'win' || G.state === 'lose')) {
+        resetFull();
+        G.state = 'playing';
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') setKey('left', false);
+      if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') setKey('right', false);
+      if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'k' || e.key === ' ') setKey('jump', false);
+      if (e.key.toLowerCase() === 'j') setKey('attack', false);
+    });
+
+    function bindTouch(btn, key) {
+      const on = (ev) => { ev.preventDefault(); setKey(key, true); };
+      const off = (ev) => { ev.preventDefault(); setKey(key, false); };
+      btn.addEventListener('touchstart', on, { passive: false });
+      btn.addEventListener('touchend', off, { passive: false });
+      btn.addEventListener('mousedown', on);
+      btn.addEventListener('mouseup', off);
+      btn.addEventListener('mouseleave', off);
+    }
+
+    document.querySelectorAll('[data-key]').forEach(btn => {
+      bindTouch(btn, btn.getAttribute('data-key'));
+    });
+
+    resetFull();
+    draw();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
