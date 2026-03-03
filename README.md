@@ -4,6 +4,36 @@ A collection of small HTML5 games for learning and nostalgia. Each game is a sim
 
 ## 🎮 Available Games
 
+```markdown
+### 1. Klondike Solitaire
+A classic Klondike Solitaire implementation featuring drag-and-drop or click-to-play controls, Draw 1 and Draw 3 modes, undo/hint systems, autocomplete animations, and a polished green felt interface.
+```
+
+**How to Play:**
+1. Open `Solitaire.html` in your web browser
+2. Drag cards or click to select/move them
+3. Build four foundation piles (A→K by suit) to win
+
+**Controls:**
+- Click / Drag: Move cards
+- Double-click: Auto-move card to foundation
+- Space: Draw from stock
+- Z: Undo
+- H: Hint
+- N: New game
+- Escape: Deselect
+
+**Features:**
+- Klondike rules with draw-1 / draw-3 modes
+- Drag-and-drop + click-to-select
+- Undo (unlimited history)
+- Smart hint system
+- Auto-complete animation
+- Score & timer tracking
+- Fully responsive layout
+
+---
+
 ### 1. FC Galaxian
 A classic space shooter game inspired by the original Galaxian arcade game.
 
@@ -109,10 +139,15 @@ A classic space shooter game inspired by the original Galaxian arcade game.
 ## 📁 Project Structure
 
 ```
-little-game/
-├── Galaxian.html          # FC Galaxian game
-├── README.md              # This documentation
-└── [Future Games]         # More games coming soon...
+h5-minigames/
+├── Galaxian.html          # FC Galaxian space shooter
+├── Snake.html             # Classic Snake
+├── Breakout.html          # Breakout / Arkanoid
+├── Tetris.html            # Tetris
+├── Castlevania.html       # Castlevania-style platformer demo
+├── Solitaire.html         # Klondike Solitaire card game ← NEW
+├── assets/                # Shared game assets
+└── README.md              # This documentation
 ```
 
 ## 🎯 Learning Objectives
